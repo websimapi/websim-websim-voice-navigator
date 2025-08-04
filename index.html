@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSim Voice Navigator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #main-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #iframe-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+        }
+
+        #websim-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #000;
+        }
+
+        #voice-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            min-width: 300px;
+            max-width: 90vw;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        #voice-panel:hover {
+            transform: translateX(-50%) translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+        }
+
+        #status-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #666;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .status-dot.listening {
+            background: #00ff88;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-dot.speaking {
+            background: #0088ff;
+            animation: pulse 0.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        #transcript {
+            font-size: 14px;
+            color: #ccc;
+            margin-bottom: 10px;
+            min-height: 20px;
+            text-align: center;
+        }
+
+        #controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #666;
+            font-size: 18px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #skip-overlay {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 0, 0, 0.9);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        #skip-overlay.show {
+            transform: translateX(0);
+        }
+    </style>
+</head>
+<body>
+    <div id="main-container">
+        <div id="iframe-container">
+            <div id="loading">Loading WebSim...</div>
+            <iframe id="websim-frame" src="" seamless></iframe>
+        </div>
+        
+        <div id="voice-panel">
+            <div id="status-indicator">
+                <div class="status-dot" id="status-dot"></div>
+                <span id="status-text">Click to start voice control</span>
+            </div>
+            <div id="transcript">Say "help" for voice commands</div>
+            <div id="controls">
+                <button onclick="voiceNav.startListening()">🎤 Listen</button>
+                <button onclick="voiceNav.nextSite()">⏭️ Next</button>
+                <button onclick="voiceNav.previousSite()">⏮️ Previous</button>
+                <button onclick="voiceNav.skipCurrent()">⏭️ Skip</button>
+                <button onclick="voiceNav.showHelp()">❓ Help</button>
+            </div>
+        </div>
+
+        <div id="skip-overlay">
+            Site skipped by voice command
+        </div>
+    </div>
+
+    <script type="module" src="voice-navigator.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
+
