@@ -10,6 +10,7 @@ class VoiceNavigator {
         this.wakeWords = ['websim', 'web sim'];
         this.isActive = false; // Start inactive
         this.permissionGranted = false;
+        this.wakeWordDetected = false;
         
         this.commands = {
             'next': () => this.nextSite(),
@@ -31,7 +32,9 @@ class VoiceNavigator {
             'web sim start listening': () => this.startListening(),
             'stop listening': () => this.stopListening(),
             'websim stop listening': () => this.stopListening(),
-            'web sim stop listening': () => this.stopListening()
+            'web sim stop listening': () => this.stopListening(),
+            'fullscreen': () => this.toggleFullscreen(),
+            'full screen': () => this.toggleFullscreen()
         };
         
         this.init();
@@ -52,6 +55,28 @@ class VoiceNavigator {
         } catch (error) {
             // Fallback for browsers without permissions API
             console.log('Permissions API not supported, will request directly');
+        }
+
+        // Enter fullscreen mode
+        this.enterFullscreen();
+    }
+
+    enterFullscreen() {
+        const element = document.documentElement;
+        if (element.requestFullscreen) {
+            element.requestFullscreen();
+        } else if (element.webkitRequestFullscreen) {
+            element.webkitRequestFullscreen();
+        } else if (element.msRequestFullscreen) {
+            element.msRequestFullscreen();
+        }
+    }
+
+    toggleFullscreen() {
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            this.enterFullscreen();
         }
     }
 
@@ -141,14 +166,27 @@ class VoiceNavigator {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         this.recognition = new SpeechRecognition();
         this.recognition.continuous = true;
-        this.recognition.interimResults = false; // Changed to false for better accuracy
+        this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
 
         this.recognition.onresult = (event) => {
-            const result = event.results[event.results.length - 1];
-            if (result.isFinal) {
-                const transcript = result[0].transcript.toLowerCase().trim();
-                this.processVoiceCommand(transcript);
+            let finalTranscript = '';
+            let interimTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript.toLowerCase();
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript;
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+
+            // Check for wake words in interim results for responsiveness
+            const fullTranscript = finalTranscript || interimTranscript;
+            if (this.containsWakeWord(fullTranscript)) {
+                this.wakeWordDetected = true;
+                this.processVoiceCommand(fullTranscript);
             }
         };
 
@@ -157,8 +195,8 @@ class VoiceNavigator {
             this.updateVoiceIndicator('error');
             
             if (event.error === 'no-speech') {
-                // Don't restart - wait for explicit start
-                console.log('No speech detected, waiting for user');
+                // Continue listening
+                this.restartRecognition();
             } else if (event.error === 'network') {
                 this.speak('Network error with voice recognition. Please check your connection.');
             } else if (event.error === 'not-allowed') {
@@ -168,39 +206,42 @@ class VoiceNavigator {
 
         this.recognition.onend = () => {
             if (this.isActive) {
-                // Restart if we're supposed to be listening
-                setTimeout(() => {
-                    if (this.isActive && this.recognition) {
-                        this.recognition.start();
-                    }
-                }, 100);
+                this.restartRecognition();
             }
         };
+    }
 
-        this.recognition.onstart = () => {
-            this.updateVoiceIndicator('listening');
-            console.log('Speech recognition started');
-        };
+    restartRecognition() {
+        if (this.isActive && this.recognition) {
+            setTimeout(() => {
+                try {
+                    this.recognition.start();
+                } catch (error) {
+                    console.log('Restarting recognition...');
+                    setTimeout(() => this.restartRecognition(), 100);
+                }
+            }, 100);
+        }
+    }
+
+    containsWakeWord(text) {
+        return this.wakeWords.some(word => text.includes(word));
     }
 
     processVoiceCommand(transcript) {
         console.log('Processing voice command:', transcript);
         
-        // Check for wake words
-        const containsWakeWord = this.wakeWords.some(word => transcript.includes(word));
-        
-        if (containsWakeWord || !this.wakeWords.some(word => transcript.includes(word))) {
-            // Process as command even without wake word for better UX
-            let command = transcript;
-            
-            // Remove wake words if present
-            this.wakeWords.forEach(word => {
-                command = command.replace(new RegExp(word, 'gi'), '').trim();
-            });
-            
-            if (command.length > 0) {
-                this.processCommand(command);
-            }
+        // Remove wake words
+        let command = transcript;
+        this.wakeWords.forEach(word => {
+            command = command.replace(new RegExp(word, 'gi'), '').trim();
+        });
+
+        // Clean up command
+        command = command.replace(/^\s+|\s+$/g, '').replace(/\s+/g, ' ');
+
+        if (command.length > 0) {
+            this.processCommand(command);
         }
     }
 
@@ -214,7 +255,7 @@ class VoiceNavigator {
         if (matchedCommand) {
             this.commands[matchedCommand]();
         } else {
-            this.speak(`I heard: ${command}. Say "help" for voice commands.`);
+            this.speak(`I heard: ${command}. Say "websim help" for voice commands.`);
         }
     }
 
@@ -231,18 +272,9 @@ class VoiceNavigator {
 
         if (!this.isActive) {
             this.isActive = true;
-            try {
-                this.recognition.start();
-                this.speak('Voice control activated');
-            } catch (error) {
-                console.error('Error starting recognition:', error);
-                this.recognition.stop();
-                setTimeout(() => {
-                    if (this.isActive && this.recognition) {
-                        this.recognition.start();
-                    }
-                }, 500);
-            }
+            this.updateVoiceIndicator('listening');
+            this.speak('Voice control activated');
+            this.recognition.start();
         }
     }
 
@@ -261,7 +293,7 @@ class VoiceNavigator {
         
         if (state === 'listening') {
             indicator.className = 'active listening';
-            indicator.textContent = 'Listening...';
+            indicator.textContent = 'Listening for "websim..."';
             statusDot.className = 'status-dot listening';
         } else if (state === 'active') {
             indicator.className = 'active';
@@ -277,11 +309,9 @@ class VoiceNavigator {
             statusDot.className = 'status-dot';
         }
 
-        // Auto-hide after 3 seconds if not listening
-        if (state !== 'listening') {
-            setTimeout(() => {
-                indicator.className = '';
-            }, 3000);
+        // Keep indicator visible when listening
+        if (state === 'listening') {
+            indicator.style.opacity = '1';
         }
     }
 
