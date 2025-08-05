@@ -44,17 +44,21 @@ class VoiceNavigator {
         this.loadRandomSite();
         this.initSpeechRecognition();
         
-        // Check if permission was already granted
+        // Check if permission was already granted - handle both supported and unsupported browsers
         try {
             const result = await navigator.permissions.query({ name: 'microphone' });
             if (result.state === 'granted') {
                 this.permissionGranted = true;
                 document.getElementById('permissions-prompt').classList.add('hidden');
                 this.startListening();
+            } else if (result.state === 'prompt') {
+                // Permission needs to be requested
+                console.log('Microphone permission needs to be requested');
             }
         } catch (error) {
-            // Fallback for browsers without permissions API
+            // Fallback for browsers without permissions API (Safari, older browsers)
             console.log('Permissions API not supported, will request directly');
+            // Don't auto-request, let user click button
         }
 
         // Enter fullscreen mode
@@ -82,6 +86,7 @@ class VoiceNavigator {
 
     async requestPermissions() {
         try {
+            // Modern approach with proper error handling
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
                     echoCancellation: true,
@@ -100,7 +105,15 @@ class VoiceNavigator {
         } catch (error) {
             console.error('Microphone access denied:', error);
             this.updateVoiceIndicator('error');
-            alert('Microphone access is required for voice control. Please enable it in your browser settings and refresh the page.');
+            
+            // More specific error messages
+            if (error.name === 'NotAllowedError') {
+                alert('Microphone access was denied. Please enable microphone permissions in your browser settings and refresh the page.');
+            } else if (error.name === 'NotFoundError') {
+                alert('No microphone found. Please check that a microphone is connected and enabled.');
+            } else {
+                alert(`Error accessing microphone: ${error.message}. Please check your browser settings.`);
+            }
         }
     }
 
@@ -266,7 +279,8 @@ class VoiceNavigator {
         }
 
         if (!this.permissionGranted) {
-            this.speak('Please click enable voice control first to grant microphone permissions.');
+            // Try to request permission directly if not already granted
+            this.requestPermissions();
             return;
         }
 
@@ -274,7 +288,15 @@ class VoiceNavigator {
             this.isActive = true;
             this.updateVoiceIndicator('listening');
             this.speak('Voice control activated');
-            this.recognition.start();
+            try {
+                this.recognition.start();
+            } catch (error) {
+                console.error('Error starting recognition:', error);
+                this.recognition.stop();
+                setTimeout(() => {
+                    if (this.isActive) this.recognition.start();
+                }, 100);
+            }
         }
     }
 
