@@ -54,11 +54,34 @@ class VoiceNavigator {
             } else if (result.state === 'prompt') {
                 // Permission needs to be requested
                 console.log('Microphone permission needs to be requested');
+            } else if (result.state === 'denied') {
+                // Permission was denied
+                console.log('Microphone permission was denied');
+                document.getElementById('permissions-prompt').style.display = 'none';
+                this.speak('Microphone access was denied. Please enable it in your browser settings to use voice commands.');
             }
         } catch (error) {
             // Fallback for browsers without permissions API (Safari, older browsers)
             console.log('Permissions API not supported, will request directly');
             // Don't auto-request, let user click button
+            // Check if we have permission by trying to get user media
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    } 
+                });
+                
+                // If we get here, permission was already granted
+                stream.getTracks().forEach(track => track.stop());
+                this.permissionGranted = true;
+                document.getElementById('permissions-prompt').classList.add('hidden');
+                this.startListening();
+            } catch (error) {
+                console.log('Need to request permission via button');
+            }
         }
 
         // Enter fullscreen mode
@@ -107,9 +130,9 @@ class VoiceNavigator {
             this.updateVoiceIndicator('error');
             
             // More specific error messages
-            if (error.name === 'NotAllowedError') {
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                 alert('Microphone access was denied. Please enable microphone permissions in your browser settings and refresh the page.');
-            } else if (error.name === 'NotFoundError') {
+            } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
                 alert('No microphone found. Please check that a microphone is connected and enabled.');
             } else {
                 alert(`Error accessing microphone: ${error.message}. Please check your browser settings.`);
