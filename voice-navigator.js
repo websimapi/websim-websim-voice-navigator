@@ -7,6 +7,8 @@ class VoiceNavigator {
         this.history = [];
         this.skippedSites = new Set();
         this.preferences = JSON.parse(localStorage.getItem('voice-nav-preferences') || '{}');
+        this.wakeWords = ['websim', 'web sim'];
+        this.isActive = true;
         
         this.commands = {
             'next': () => this.nextSite(),
@@ -22,7 +24,13 @@ class VoiceNavigator {
             'dont show this': () => this.blockSite(),
             'avoid this': () => this.blockSite(),
             'use elevenlabs': () => this.enableElevenLabs(),
-            'switch to elevenlabs': () => this.enableElevenLabs()
+            'switch to elevenlabs': () => this.enableElevenLabs(),
+            'start listening': () => this.startListening(),
+            'websim start listening': () => this.startListening(),
+            'web sim start listening': () => this.startListening(),
+            'stop listening': () => this.stopListening(),
+            'websim stop listening': () => this.stopListening(),
+            'web sim stop listening': () => this.stopListening()
         };
         
         this.init();
@@ -32,6 +40,18 @@ class VoiceNavigator {
         await this.loadRandomSite();
         this.initSpeechRecognition();
         this.applyPreferences();
+    }
+
+    requestPermissions() {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(() => {
+                document.getElementById('permissions-prompt').classList.add('hidden');
+                this.startListening();
+            })
+            .catch((error) => {
+                console.error('Microphone access denied:', error);
+                alert('Microphone access is required for voice control. Please enable it in your browser settings and refresh the page.');
+            });
     }
 
     async loadRandomSite() {
@@ -91,26 +111,57 @@ class VoiceNavigator {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             this.recognition = new SpeechRecognition();
             this.recognition.continuous = true;
-            this.recognition.interimResults = false;
+            this.recognition.interimResults = true;
             this.recognition.lang = 'en-US';
 
             this.recognition.onresult = (event) => {
-                const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
-                document.getElementById('transcript').textContent = `You said: "${transcript}"`;
-                this.processCommand(transcript);
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript.toLowerCase();
+                    
+                    if (event.results[i].isFinal) {
+                        this.processVoiceCommand(transcript);
+                    }
+                }
             };
 
             this.recognition.onerror = (event) => {
                 console.error('Speech recognition error:', event.error);
                 if (event.error === 'no-speech') {
-                    this.speak("I didn't catch that. Please try again.");
+                    // Restart listening if no speech detected
+                    setTimeout(() => {
+                        if (this.isActive) {
+                            this.recognition.start();
+                        }
+                    }, 1000);
                 }
             };
 
             this.recognition.onend = () => {
-                this.isListening = false;
-                this.updateStatus();
+                if (this.isActive) {
+                    // Restart if not explicitly stopped
+                    setTimeout(() => {
+                        if (this.isActive) {
+                            this.recognition.start();
+                        }
+                    }, 1000);
+                }
             };
+        }
+    }
+
+    processVoiceCommand(transcript) {
+        const wakeWordDetected = this.wakeWords.some(word => transcript.includes(word));
+        
+        if (wakeWordDetected) {
+            // Remove wake words from command
+            let command = transcript;
+            this.wakeWords.forEach(word => {
+                command = command.replace(new RegExp(word, 'gi'), '').trim();
+            });
+            
+            if (command.length > 0) {
+                this.processCommand(command);
+            }
         }
     }
 
@@ -132,32 +183,41 @@ class VoiceNavigator {
             return;
         }
 
-        if (!this.isListening) {
+        if (!this.isActive) {
+            this.isActive = true;
             this.recognition.start();
-            this.isListening = true;
-            this.updateStatus();
+            this.updateVoiceIndicator('active');
+            this.speak('Voice control activated');
         }
     }
 
     stopListening() {
-        if (this.recognition && this.isListening) {
+        if (this.recognition && this.isActive) {
+            this.isActive = false;
             this.recognition.stop();
-            this.isListening = false;
-            this.updateStatus();
+            this.updateVoiceIndicator('inactive');
+            this.speak('Voice control deactivated');
         }
     }
 
-    updateStatus() {
-        const dot = document.getElementById('status-dot');
-        const text = document.getElementById('status-text');
+    updateVoiceIndicator(state) {
+        const indicator = document.getElementById('voice-indicator');
         
-        if (this.isListening) {
-            dot.className = 'status-dot listening';
-            text.textContent = 'Listening...';
+        if (state === 'listening') {
+            indicator.className = 'active listening';
+            indicator.textContent = 'Listening...';
+        } else if (state === 'active') {
+            indicator.className = 'active';
+            indicator.textContent = 'Voice control ready';
         } else {
-            dot.className = 'status-dot';
-            text.textContent = 'Click to start voice control';
+            indicator.className = '';
+            indicator.textContent = 'Voice control ready';
         }
+
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+            indicator.className = '';
+        }, 3000);
     }
 
     async speak(text, useElevenLabs = false) {
@@ -205,7 +265,6 @@ class VoiceNavigator {
     skipCurrent() {
         if (this.currentSite) {
             this.skippedSites.add(this.currentSite.site.id);
-            this.showSkipNotification();
             this.speak('Site skipped, loading next');
             this.loadRandomSite();
         }
@@ -225,35 +284,34 @@ class VoiceNavigator {
 
     async enableElevenLabs() {
         if (!this.preferences.useElevenLabs) {
-            this.speak('Switching to ElevenLabs voices. Which voice would you like? You can say Adam, or give me a voice ID.');
+            this.speak('Switching to ElevenLabs voices. Say "Adam" or "Antoni" to choose a voice.');
             this.preferences.useElevenLabs = true;
             localStorage.setItem('voice-nav-preferences', JSON.stringify(this.preferences));
         }
     }
 
-    showSkipNotification() {
-        const overlay = document.getElementById('skip-overlay');
-        overlay.classList.add('show');
-        setTimeout(() => overlay.classList.remove('show'), 2000);
-    }
-
     showHelp() {
         const helpText = `
             Voice commands available:
-            - "Next" or "Go next" - Load a new random site
-            - "Skip" or "Skip this" - Skip current site
-            - "Back" or "Go back" - Go to previous site
-            - "Block this" - Never show this site again
-            - "Use elevenlabs" - Switch to ElevenLabs voices
-            - "Help" - Show this help
+            - "WebSim next" - Load a new random site
+            - "WebSim skip" - Skip current site
+            - "WebSim back" - Go to previous site
+            - "WebSim block this" - Never show this site again
+            - "WebSim use elevenlabs" - Switch to ElevenLabs voices
+            - "WebSim stop listening" - Pause voice control
+            - "WebSim start listening" - Resume voice control
         `;
         this.speak(helpText);
     }
 
     applyPreferences() {
-        if (this.preferences.useElevenLabs && this.preferences.elevenLabsVoice) {
-            console.log('Using ElevenLabs voice:', this.preferences.elevenLabsVoice);
-        }
+        // Auto-start listening if permissions already granted
+        navigator.permissions.query({ name: 'microphone' }).then(result => {
+            if (result.state === 'granted') {
+                document.getElementById('permissions-prompt').classList.add('hidden');
+                setTimeout(() => this.startListening(), 1000);
+            }
+        });
     }
 }
 
@@ -274,4 +332,3 @@ window.addEventListener('voice-command', (e) => {
         window.voiceNav.speak('Antoni voice activated');
     }
 });
-

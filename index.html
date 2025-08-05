@@ -38,93 +38,29 @@
             background: #000;
         }
 
-        #voice-panel {
+        #voice-indicator {
             position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(20, 20, 20, 0.95);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 20px;
-            min-width: 300px;
-            max-width: 90vw;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s ease;
-        }
-
-        #voice-panel:hover {
-            transform: translateX(-50%) translateY(-2px);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
-        }
-
-        #status-indicator {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #666;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .status-dot.listening {
-            background: #00ff88;
-            animation: pulse 1.5s infinite;
-        }
-
-        .status-dot.speaking {
-            background: #0088ff;
-            animation: pulse 0.8s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.8; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        #transcript {
-            font-size: 14px;
-            color: #ccc;
-            margin-bottom: 10px;
-            min-height: 20px;
-            text-align: center;
-        }
-
-        #controls {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        button {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            color: #00ff88;
             padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
+            border-radius: 20px;
             font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
         }
 
-        button:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-1px);
+        #voice-indicator.active {
+            opacity: 1;
         }
 
-        button:active {
-            transform: translateY(0);
+        #voice-indicator.listening {
+            background: rgba(0, 136, 255, 0.1);
+            border-color: rgba(0, 136, 255, 0.3);
+            color: #0088ff;
         }
 
         #loading {
@@ -136,25 +72,58 @@
             font-size: 18px;
         }
 
+        #permissions-prompt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        #permissions-content {
+            background: rgba(20, 20, 20, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        #permissions-content h2 {
+            margin-bottom: 20px;
+            color: #fff;
+        }
+
+        #permissions-content p {
+            color: #ccc;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        #permissions-content button {
+            background: #00ff88;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #permissions-content button:hover {
+            background: #00cc6a;
+            transform: translateY(-1px);
+        }
+
         .hidden {
             display: none !important;
-        }
-
-        #skip-overlay {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 0, 0, 0.9);
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 12px;
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
-        }
-
-        #skip-overlay.show {
-            transform: translateX(0);
         }
     </style>
 </head>
@@ -165,23 +134,16 @@
             <iframe id="websim-frame" src="" seamless></iframe>
         </div>
         
-        <div id="voice-panel">
-            <div id="status-indicator">
-                <div class="status-dot" id="status-dot"></div>
-                <span id="status-text">Click to start voice control</span>
-            </div>
-            <div id="transcript">Say "help" for voice commands</div>
-            <div id="controls">
-                <button onclick="voiceNav.startListening()">🎤 Listen</button>
-                <button onclick="voiceNav.nextSite()">⏭️ Next</button>
-                <button onclick="voiceNav.previousSite()">⏮️ Previous</button>
-                <button onclick="voiceNav.skipCurrent()">⏭️ Skip</button>
-                <button onclick="voiceNav.showHelp()">❓ Help</button>
-            </div>
+        <div id="voice-indicator">
+            Voice control ready
         </div>
 
-        <div id="skip-overlay">
-            Site skipped by voice command
+        <div id="permissions-prompt">
+            <div id="permissions-content">
+                <h2>Voice Control Ready</h2>
+                <p>This app uses voice commands to navigate WebSim hands-free. Click "Start Voice Control" to grant microphone access and begin.</p>
+                <button onclick="voiceNav.requestPermissions()">Start Voice Control</button>
+            </div>
         </div>
     </div>
 
