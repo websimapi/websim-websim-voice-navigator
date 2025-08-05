@@ -8,7 +8,7 @@ class VoiceNavigator {
         this.skippedSites = new Set();
         this.preferences = JSON.parse(localStorage.getItem('voice-nav-preferences') || '{}');
         this.wakeWords = ['websim', 'web sim'];
-        this.isActive = true;
+        this.isActive = false; // Start inactive
         
         this.commands = {
             'next': () => this.nextSite(),
@@ -39,19 +39,33 @@ class VoiceNavigator {
     async init() {
         await this.loadRandomSite();
         this.initSpeechRecognition();
-        this.applyPreferences();
+        this.requestPermissions();
     }
 
-    requestPermissions() {
-        navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(() => {
-                document.getElementById('permissions-prompt').classList.add('hidden');
-                this.startListening();
-            })
-            .catch((error) => {
-                console.error('Microphone access denied:', error);
-                alert('Microphone access is required for voice control. Please enable it in your browser settings and refresh the page.');
+    async requestPermissions() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    sampleRate: 44100
+                } 
             });
+            
+            // Immediately stop the stream - we just wanted permission
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Hide permissions prompt
+            document.getElementById('permissions-prompt').classList.add('hidden');
+            
+            // Start listening right away
+            this.isActive = true;
+            this.startListening();
+            
+        } catch (error) {
+            console.error('Microphone access denied:', error);
+            alert('Microphone access is required for voice control. Please enable it in your browser settings and refresh the page.');
+        }
     }
 
     async loadRandomSite() {
